@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,7 +8,10 @@
     :root { color-scheme: dark; }
     body { font-family: sans-serif; margin: 2rem; background: #0f172a; color: #e2e8f0; }
     .box { max-width: 900px; margin: 0 auto; padding: 1rem 1.25rem; border: 1px solid #334155; border-radius: 12px; background: #111827; }
-    h1 { margin-top: 0; }
+    .box-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+    .box-header h1 { margin-top: 0; flex: 1; }
+    #langBtn { margin-top: 0; padding: .4rem .6rem; font-size: 1.25rem; line-height: 1; background: transparent; border: 1px solid #475569; border-radius: 8px; color: #e2e8f0; cursor: pointer; }
+    #langBtn:hover { background: #1e293b; }
     label { display: block; margin-top: .75rem; font-weight: 600; }
     input { width: 100%; margin-top: .25rem; padding: .6rem; border-radius: 8px; border: 1px solid #475569; background: #0b1220; color: #e2e8f0; box-sizing: border-box; }
     .row-inputs { display: flex; gap: .5rem; }
@@ -29,35 +32,52 @@
 </head>
 <body>
   <div class="box">
-    <h1>MRH-G2Ray Admin GUI</h1>
-    <p class="muted">This panel generates your VLESS link without terminal usage.</p>
-    <label for="uuid">UUID</label>
+    <div class="box-header">
+      <h1 id="pageTitle">MRH-G2Ray Admin GUI</h1>
+      <button id="langBtn" type="button" title="Change language / تغییر زبان">🌐</button>
+    </div>
+    <p class="muted" id="pageSubtitle"></p>
+    <label for="uuid" id="uuidLabel"></label>
     <input id="uuid" value="">
-    <label for="path">Path</label>
+    <label for="path" id="pathLabel"></label>
     <input id="path" value="/">
-    <label for="remark">Remark</label>
+    <label for="remark" id="remarkLabel"></label>
     <input id="remark" value="ghtun">
 
     <hr class="section-divider">
-    <p class="section-title">Custom Endpoint</p>
-    <p class="muted">Optionally specify a custom IP / hostname and port to generate an extra config entry.</p>
+    <p class="section-title" id="customEndpointTitle"></p>
+    <p class="muted" id="customEndpointDesc"></p>
     <div class="row-inputs">
       <div style="flex:1">
-        <label for="customIp" style="margin-top:0">Custom IP / Hostname</label>
-        <input id="customIp" placeholder="e.g. 1.2.3.4 or example.com">
+        <label for="customIp" id="customIpLabel" style="margin-top:0"></label>
+        <input id="customIp">
       </div>
       <div>
-        <label for="customPort" style="margin-top:0">Port</label>
+        <label for="customPort" id="customPortLabel" style="margin-top:0"></label>
         <input id="customPort" class="port" placeholder="443" value="443">
       </div>
     </div>
 
-    <button id="copyAllBtn">Copy All Configs</button>
+    <button id="copyAllBtn"></button>
     <div id="configs" class="configs"></div>
   </div>
   <script>
     const STATIC_IPS = ["63.141.252.203", "50.7.5.83", "94.130.50.12"];
+    const LANGUAGES = ["en", "fa-IR"];
+    const FALLBACK_STRINGS = {
+      lang: "en", dir: "ltr",
+      title: "MRH-G2Ray Admin GUI",
+      subtitle: "This panel generates your VLESS link without terminal usage.",
+      uuidLabel: "UUID", pathLabel: "Path", remarkLabel: "Remark",
+      customEndpointTitle: "Custom Endpoint",
+      customEndpointDesc: "Optionally specify a custom IP / hostname and port to generate an extra config entry.",
+      customIpLabel: "Custom IP / Hostname", customIpPlaceholder: "e.g. 1.2.3.4 or example.com",
+      customPortLabel: "Port", copyAll: "Copy All Configs",
+      copy: "Copy", copied: "Copied!", copyFailed: "Copy failed",
+      uuidNotLoaded: "UUID not loaded. Please wait for Xray start, then refresh."
+    };
     let serverIp = "";
+    let currentLang = Object.assign({}, FALLBACK_STRINGS);
 
     const uuidEl = document.getElementById("uuid");
     const pathEl = document.getElementById("path");
@@ -66,6 +86,45 @@
     const customPortEl = document.getElementById("customPort");
     const configsEl = document.getElementById("configs");
     const copyAllBtn = document.getElementById("copyAllBtn");
+    const langBtn = document.getElementById("langBtn");
+
+    function applyLang(t) {
+      currentLang = t;
+      document.documentElement.lang = t.lang;
+      document.documentElement.dir = t.dir;
+      document.title = t.title;
+      document.getElementById("pageTitle").textContent = t.title;
+      document.getElementById("pageSubtitle").textContent = t.subtitle;
+      document.getElementById("uuidLabel").textContent = t.uuidLabel;
+      document.getElementById("pathLabel").textContent = t.pathLabel;
+      document.getElementById("remarkLabel").textContent = t.remarkLabel;
+      document.getElementById("customEndpointTitle").textContent = t.customEndpointTitle;
+      document.getElementById("customEndpointDesc").textContent = t.customEndpointDesc;
+      document.getElementById("customIpLabel").textContent = t.customIpLabel;
+      customIpEl.placeholder = t.customIpPlaceholder;
+      document.getElementById("customPortLabel").textContent = t.customPortLabel;
+      copyAllBtn.textContent = t.copyAll;
+      render();
+    }
+
+    async function loadLang(code) {
+      try {
+        const res = await fetch(`locales/${code}.json`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const t = await res.json();
+        localStorage.setItem("mrh-lang", code);
+        applyLang(t);
+      } catch (err) {
+        console.warn(`Could not load locale "${code}":`, err);
+      }
+    }
+
+    langBtn.addEventListener("click", () => {
+      const currentCode = currentLang.lang || "en";
+      const idx = LANGUAGES.indexOf(currentCode);
+      const nextCode = LANGUAGES[(idx + 1) % LANGUAGES.length];
+      loadLang(nextCode);
+    });
 
     function extractCodespaceName(hostname) {
       const match = hostname.match(/^(.*)-\d+\.app\.github\.dev$/);
@@ -102,21 +161,19 @@
     }
 
     async function copyText(text, button, idleLabel) {
-      const originalLabel = idleLabel;
-      const successLabel = "Copied!";
-      const failureLabel = "Copy failed";
       try {
         await navigator.clipboard.writeText(text);
-        button.textContent = successLabel;
+        button.textContent = currentLang.copied || "Copied!";
       } catch (error) {
         console.warn("Clipboard copy failed:", error);
-        button.textContent = failureLabel;
+        button.textContent = currentLang.copyFailed || "Copy failed";
       }
-      setTimeout(() => (button.textContent = originalLabel), 1200);
+      setTimeout(() => (button.textContent = idleLabel), 1200);
     }
 
     function render() {
       configsEl.innerHTML = "";
+      const copyLabel = currentLang.copy || "Copy";
       for (const config of getConfigs()) {
         const item = document.createElement("div");
         item.className = "config-item";
@@ -132,8 +189,8 @@
 
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = "Copy";
-        button.addEventListener("click", () => copyText(config.link, button, "Copy"));
+        button.textContent = copyLabel;
+        button.addEventListener("click", () => copyText(config.link, button, copyLabel));
 
         row.appendChild(pre);
         row.appendChild(button);
@@ -146,24 +203,32 @@
     [uuidEl, pathEl, remarkEl, customIpEl, customPortEl].forEach((el) => el.addEventListener("input", render));
     copyAllBtn.addEventListener("click", () => {
       const allConfigs = getConfigs().map((config) => config.link).join("\n");
-      copyText(allConfigs, copyAllBtn, "Copy All Configs");
+      copyText(allConfigs, copyAllBtn, currentLang.copyAll || "Copy All Configs");
     });
 
     async function preloadInfo() {
       try {
-        const info = await fetch("xray-info.json", { cache: "no-store" }).then((r) => r.json());
+        const res = await fetch("xray-info.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const info = await res.json();
         if (info.uuid) uuidEl.value = info.uuid;
         if (info.path) pathEl.value = info.path;
         if (info.remark) remarkEl.value = info.remark;
         if (info.server_ip) serverIp = info.server_ip;
       } catch (error) {
         console.warn("Could not load xray-info.json:", error);
-        if (!uuidEl.value) uuidEl.value = "UUID not loaded. Please wait for Xray start, then refresh.";
+        if (!uuidEl.value) uuidEl.value = currentLang.uuidNotLoaded;
       }
       render();
     }
 
-    preloadInfo();
+    async function init() {
+      const savedLang = localStorage.getItem("mrh-lang") || "en";
+      await loadLang(savedLang);
+      await preloadInfo();
+    }
+
+    init();
   </script>
 </body>
 </html>
